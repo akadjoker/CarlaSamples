@@ -369,6 +369,7 @@ def main():
                 
                 # Converter imagem original para BGR 
                 img_original =imagem_atual.copy()# cv2.cvtColor(imagem_atual, cv2.COLOR_RGB2BGR)
+
                 #img_original = imagem_atual
                 
                 # Adicionar informações à imagem original
