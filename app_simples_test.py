@@ -5,13 +5,130 @@ import time
 import random
 import sys
 
- 
+from lane_detection import (
+    Line, left_line, right_line, 
+    find_lane_pixels, fit_polynomial, 
+    apply_thresholds, perspective_transform,apply_thresholds_carla
+)
 
 # Configurações
 LARGURA = 640
 ALTURA = 480
 
- 
+threshold_min = 200
+threshold_max = 255
+sobel_min = 30
+sobel_max = 150
+canny_min = 50
+canny_max = 150
+
+def line_detection(imagem_bgr):
+    # Converter de RGB para BGR para o OpenCV
+        #imagem_bgr = cv2.cvtColor(imagem_atual, cv2.COLOR_RGB2BGR)
+        
+        try:
+            src = np.float32([
+                [LARGURA*0.25, ALTURA],       # Inferior esquerdo
+                [LARGURA*0.45, ALTURA*0.6],   # Superior esquerdo
+                [LARGURA*0.55, ALTURA*0.6],   # Superior direito
+                [LARGURA*0.75, ALTURA]        # Inferior direito
+            ])
+            
+            dst = np.float32([
+                [LARGURA*0.3, ALTURA],    # Inferior esquerdo
+                [LARGURA*0.3, 0],         # Superior esquerdo
+                [LARGURA*0.7, 0],         # Superior direito
+                [LARGURA*0.7, ALTURA]     # Inferior direito
+            ])
+            thresh_min = cv2.getTrackbarPos('Threshold Min', 'CARLA')
+            thresh_max = cv2.getTrackbarPos('Threshold Max', 'CARLA')
+            sobel_min = cv2.getTrackbarPos('Sobel Min', 'CARLA')
+            sobel_max = cv2.getTrackbarPos('Sobel Max', 'CARLA')
+            canny_min = cv2.getTrackbarPos('Canny Min', 'CARLA')
+            canny_max = cv2.getTrackbarPos('Canny Max', 'CARLA')
+            
+            slider_vals = (thresh_min, thresh_max, sobel_min, sobel_max, canny_min, canny_max)
+            
+            # 1. Aplicar limiares adaptados para CARLA com valores dos sliders
+            binario = apply_thresholds_carla(imagem_bgr, slider_vals)
+            
+            # 2. Aplicar transformação de perspetiva
+            warped, M, Minv = perspective_transform(binario, src, dst)
+            
+            # 3. Ajustar polinómios às linhas
+            left_fitx, right_fitx, result, out_img, ploty = fit_polynomial(warped)
+            
+            # 4. Criar visualização final
+            if left_fitx is not None and right_fitx is not None:
+                # Visualizar as faixas na imagem original
+                warp_zero = np.zeros_like(warped).astype(np.uint8)
+                color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
+                
+                # Reformatar arrays para desenhar o polígono
+                pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+                pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+                pts = np.hstack((pts_left, pts_right))
+                
+                # Desenhar o polígono na imagem
+                cv2.fillPoly(color_warp, np.int32([pts]), (0, 255, 0))
+                
+                # Voltar à perspetiva original
+                newwarp = cv2.warpPerspective(color_warp, Minv, (imagem_bgr.shape[1], imagem_bgr.shape[0]))
+                
+                # Combinar com a imagem original
+                final_result = cv2.addWeighted(imagem_bgr, 1, newwarp, 0.3, 0)
+                
+                # Adicionar métricas à imagem final
+                raio_medio = (left_line.radius_of_curvature + right_line.radius_of_curvature) / 2
+                offset = (left_line.line_base_pos + right_line.line_base_pos) / 2
+                
+                info_text = f"Raio: {raio_medio:.1f}m | Offset: {offset:.2f}m"
+                cv2.putText(final_result, info_text, (10, 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                
+                # Preparar imagens para visualização
+                binario_rgb = np.dstack((binario*255, binario*255, binario*255))
+                warped_rgb = np.dstack((warped*255, warped*255, warped*255))
+                
+                # Criar grelha para visualização
+                topo = np.hstack((imagem_bgr, final_result))
+                meio = np.hstack((binario_rgb, warped_rgb))
+                baixo = np.hstack((out_img, result))
+                
+                # Garantir que todas as imagens têm o mesmo tamanho
+                meio = cv2.resize(meio, (topo.shape[1], meio.shape[0]))
+                baixo = cv2.resize(baixo, (topo.shape[1], baixo.shape[0]))
+                
+                # Combinar todas as visualizações
+                grelha = np.vstack((topo, meio, baixo))
+                
+                # Redimensionar para caber no ecrã
+                escala = min(1.0, 1200 / grelha.shape[1])
+                dim = (int(grelha.shape[1] * escala), int(grelha.shape[0] * escala))
+                grelha_redim = cv2.resize(grelha, dim)
+                
+                # Mostrar grelha
+                cv2.imshow('DEBUG', grelha_redim)
+            else:
+                # Se não detetou linhas, mostrar só imagem original e binário
+                binario_rgb = np.dstack((binario*255, binario*255, binario*255))
+                warped_rgb = np.dstack((warped*255, warped*255, warped*255))
+                
+                # Juntar as imagens
+                visualizacao = np.hstack((imagem_bgr, binario_rgb))
+                
+                # Adicionar texto
+                cv2.putText(visualizacao, "Sem Linhas", (10, 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                
+                # Mostrar
+                cv2.imshow('DEBUG', visualizacao)
+        
+        except Exception as e:
+            print(f"Erro ao processar imagem: {e}")
+            #traceback.print_exc()
+            # Mostrar imagem original em caso de erro
+            cv2.imshow('DEBUG', imagem_bgr)
 
 def detetar_linhas_janela_deslizante(imagem):
     # Converter para escala de cinzentos
@@ -221,7 +338,8 @@ def detetar_linhas_estrada(imagem):
     resultado = cv2.addWeighted(imagem, 0.8, imagem_linhas, 1, 0)
     
     cv2.imshow('RESULTADO', resultado)
- 
+    
+    # return resultado, imagem_linhas, binario, bordas_coloridas
 
 
 def nothing(x):
@@ -333,13 +451,32 @@ def main():
         cv2.namedWindow('CARLA', cv2.WINDOW_NORMAL)
       
  
-   
+        cv2.resizeWindow('CARLA', 600, 300)
+        
+        # Criar sliders para os parâmetros
+        # cv2.createTrackbar('Threshold Min', 'CARLA', threshold_min, 255, nothing)
+        # cv2.createTrackbar('Threshold Max', 'CARLA', threshold_max, 255, nothing)
+        # cv2.createTrackbar('Sobel Min', 'CARLA', sobel_min, 255, nothing)
+        # cv2.createTrackbar('Sobel Max', 'CARLA', sobel_max, 255, nothing)
+        # cv2.createTrackbar('Canny Min', 'CARLA', canny_min, 255, nothing)
+        # cv2.createTrackbar('Canny Max', 'CARLA', canny_max, 255, nothing)
+        
+        # # Criar janela para visualização
+        # cv2.namedWindow('DEBUG', cv2.WINDOW_NORMAL)
+        # cv2.resizeWindow('DEBUG', LARGURA*2, ALTURA*2)
         
  
         # Função para processar a imagem da câmara
         def processar_imagem(imagem):
             nonlocal imagem_atual 
- 
+
+            # array = np.frombuffer(imagem.raw_data, dtype=np.dtype("uint8"))
+            # array = np.reshape(array, (imagem.height, imagem.width, 4))
+            # array = array[:, :, :3]  # Descarta o canal alfa
+            # array = array[:, :, ::-1]  # Converte BGR para RGB
+            # #imagem_opencv = array.copy()
+            
+            # Converter para formato OpenCV
             array = np.frombuffer(imagem.raw_data, dtype=np.dtype("uint8"))
             array = np.reshape(array, (imagem.height, imagem.width, 4))
             imagem_atual = array[:, :, :3].copy()
@@ -383,8 +520,33 @@ def main():
                 
                 cv2.imshow('CARLA', img_original)
 
-                detetar_linhas_estrada(imagem_atual)
-         
+                #detetar_linhas_estrada(imagem_atual)
+                # imagem_bgr = cv2.cvtColor(imagem_atual, cv2.COLOR_RGB2BGR)
+    
+ 
+
+                resultado, img_debug, binario, linhas = detetar_linhas_janela_deslizante(img_original)
+                
+                # Redimensionar imagens para visualização lado a lado
+                altura, largura = img_original.shape[:2]
+                binario_rgb = cv2.cvtColor(binario, cv2.COLOR_GRAY2BGR)
+                
+                # Criar grelha para visualização
+                topo = np.hstack((img_original, img_debug))
+                baixo = np.hstack((binario_rgb, linhas))
+                grelha = np.vstack((topo, baixo))
+                
+                # Redimensionar para caber no ecrã
+                escala = min(1.0, 1280 / grelha.shape[1])
+                dim = (int(grelha.shape[1] * escala), int(grelha.shape[0] * escala))
+                grelha_redim = cv2.resize(grelha, dim)
+                
+                # Mostrar a grelha
+                cv2.imshow("Lines", grelha_redim)
+                
+                #final = cv2.cvtColor(resultado, cv2.COLOR_BGR2RGB)
+                #line_detection(imagem_atual)
+
                 
         
                 key = cv2.waitKey(1) & 0xFF

@@ -1,0 +1,12 @@
+python3 -m venv carla-env
+source carla-env/bin/activate
+pip install -r requirement.txt
+
+#DISPLAY= ./CarlaUE4.sh -opengl -quality-level=Low -carla-server -benchmark -fps=360
+#-RenderOffScreen -quality-level=Low -ResX=800 -ResY=600 -fps=10
+-RenderOffScreen -quality-level=Low -ResX=800 -ResY=600 -fps=60
+
+./CarlaUE4.sh /Game/Maps/Town10HD_Opt -quality-level=Low   -carla-server   -benchmark   -fps=30   -preferedsyncmode=1.0   -map=Town10HD_Opt   -nosound   -windowed -ResX=640 -ResY=480   -carla-no-hud
+
+
+$ ./CarlaUE4.sh /Game/Maps/Town10HD_Opt -carla-settings=DetecaoLinhas.CarlaSettings.ini

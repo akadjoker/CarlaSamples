@@ -12,37 +12,76 @@ LARGURA = 640
 ALTURA = 480
 
  
+# Valores iniciais para os sliders
+thresh_value = 200
+n_janelas = 18
+margem = 100
+min_pixels = 50
 
-def detetar_linhas_janela_deslizante(imagem):
+# Valores iniciais para o ROI
+roi_top_left_x = 0
+roi_top_left_y = ALTURA//2
+roi_top_right_x = LARGURA
+roi_top_right_y = ALTURA//2
+roi_bottom_right_x = LARGURA
+roi_bottom_right_y = ALTURA
+roi_bottom_left_x = 0
+roi_bottom_left_y = ALTURA
+
+def nothing(x):
+    pass
+
+def detetar_linhas_janela_deslizante(imagem, thresh_val, n_windows, margin, minpix, roi_points, prev_left=None, prev_right=None):
+    """
+    Versão melhorada com estabilização dos ângulos
+    """
     # Converter para escala de cinzentos
     cinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
     
     # Aplicar limiar para isolar linhas brancas
-    _, binario = cv2.threshold(cinza, 200, 255, cv2.THRESH_BINARY)
+    _, binario = cv2.threshold(cinza, thresh_val, 255, cv2.THRESH_BINARY)
     
-    # Região de interesse - metade inferior da imagem
+    # Região de interesse usando os pontos configuráveis
     altura, largura = binario.shape
     mascara = np.zeros_like(binario)
-    roi_vertices = np.array([[(0, altura), (0, altura//2), (largura, altura//2), (largura, altura)]], dtype=np.int32)
+    roi_vertices = np.array([roi_points], dtype=np.int32)
     cv2.fillPoly(mascara, roi_vertices, 255)
     binario_roi = cv2.bitwise_and(binario, mascara)
     
     # Criar imagem para visualização
     img_debug = np.dstack((binario_roi, binario_roi, binario_roi))
     
+    # Desenhar ROI na imagem de debug
+    cv2.polylines(img_debug, [np.array(roi_points, dtype=np.int32)], True, (0, 255, 255), 2)
+    
     # Calcular histograma da metade inferior da imagem
     histograma = np.sum(binario_roi[altura//2:, :], axis=0)
     
     # Encontrar picos no histograma para posições base das linhas
     metade_largura = largura//2
-    esquerda_base = np.argmax(histograma[:metade_largura])
-    direita_base = np.argmax(histograma[metade_largura:]) + metade_largura
+    
+    # Se tivermos deteções anteriores válidas, usá-las como referência
+    if prev_left is not None and prev_right is not None:
+        # Usar uma janela em torno da posição anterior
+        janela_esq = 100  # Ajustar conforme necessário
+        janela_dir = 100
+        
+        # Limitar a pesquisa em torno da posição anterior
+        esq_min = max(0, prev_left - janela_esq)
+        esq_max = min(metade_largura, prev_left + janela_esq)
+        dir_min = max(metade_largura, prev_right - janela_dir)
+        dir_max = min(largura, prev_right + janela_dir)
+        
+        # Encontrar picos dentro das janelas
+        esquerda_base = esq_min + np.argmax(histograma[esq_min:esq_max])
+        direita_base = dir_min + np.argmax(histograma[dir_min:dir_max])
+    else:
+        # Primeira deteção ou deteção falhou no frame anterior
+        esquerda_base = np.argmax(histograma[:metade_largura])
+        direita_base = np.argmax(histograma[metade_largura:]) + metade_largura
     
     # Configurações das janelas
-    n_janelas = 18
-    altura_janela = altura//n_janelas
-    margem = 100  # Largura da janela
-    min_pixels = 50  # Mínimo de pixels para recentrar a janela
+    altura_janela = altura//n_windows
     
     # Identificar pixels não-zero na imagem
     pixels_nao_zero = binario_roi.nonzero()
@@ -57,17 +96,32 @@ def detetar_linhas_janela_deslizante(imagem):
     indices_esquerda = []
     indices_direita = []
     
+    # Listas para guardar as posições das janelas
+    posicoes_esquerda = []
+    posicoes_direita = []
+    
     # Percorrer janelas de baixo para cima
-    for janela in range(n_janelas):
+    for janela in range(n_windows):
         # Limites verticais da janela
         y_baixo = altura - (janela+1)*altura_janela
         y_cima = altura - janela*altura_janela
         
         # Limites horizontais das janelas
-        esq_x_esquerda = esquerda_atual - margem
-        esq_x_direita = esquerda_atual + margem
-        dir_x_esquerda = direita_atual - margem
-        dir_x_direita = direita_atual + margem
+        esq_x_esquerda = esquerda_atual - margin
+        esq_x_direita = esquerda_atual + margin
+        dir_x_esquerda = direita_atual - margin
+        dir_x_direita = direita_atual + margin
+        
+        # Impedir que as janelas se sobreponham ou cruzem
+        if esq_x_direita > dir_x_esquerda:
+            # Ajustar para manter separação mínima
+            meio = (esq_x_direita + dir_x_esquerda) // 2
+            esq_x_direita = meio - 10
+            dir_x_esquerda = meio + 10
+        
+        # Guardar as posições das janelas
+        posicoes_esquerda.append((esquerda_atual, (y_baixo + y_cima) // 2))
+        posicoes_direita.append((direita_atual, (y_baixo + y_cima) // 2))
         
         # Desenhar as janelas na imagem de debug
         cv2.rectangle(img_debug, (esq_x_esquerda, y_baixo), (esq_x_direita, y_cima), (0, 255, 0), 2) 
@@ -83,17 +137,37 @@ def detetar_linhas_janela_deslizante(imagem):
         indices_esquerda.append(bons_esquerda)
         indices_direita.append(bons_direita)
         
+        # Guardar posição anterior para limitar movimento
+        esquerda_anterior = esquerda_atual
+        direita_anterior = direita_atual
+        
         # Recentrar janelas com base nos pixels encontrados
-        if len(bons_esquerda) > min_pixels:
-            esquerda_atual = int(np.mean(x_nao_zero[bons_esquerda]))
-        if len(bons_direita) > min_pixels:        
-            direita_atual = int(np.mean(x_nao_zero[bons_direita]))
+        if len(bons_esquerda) > minpix:
+            novo_esquerda = int(np.mean(x_nao_zero[bons_esquerda]))
+            # Limitar movimento da janela
+            max_movimento = margin // 2
+            if abs(novo_esquerda - esquerda_anterior) < max_movimento:
+                esquerda_atual = novo_esquerda
+        
+        if len(bons_direita) > minpix:
+            novo_direita = int(np.mean(x_nao_zero[bons_direita]))
+            # Limitar movimento da janela
+            max_movimento = margin // 2
+            if abs(novo_direita - direita_anterior) < max_movimento:
+                direita_atual = novo_direita
+        
+        # Garantir que as janelas não cruzam o meio da imagem
+        if esquerda_atual > metade_largura - 20:
+            esquerda_atual = metade_largura - 20
+        if direita_atual < metade_largura + 20:
+            direita_atual = metade_largura + 20
     
     # Concatenar arrays de índices
     try:
         indices_esquerda = np.concatenate(indices_esquerda)
         indices_direita = np.concatenate(indices_direita)
     except ValueError:
+        # Se não houver pixels suficientes, retornar apenas a imagem original
         return imagem, img_debug, binario_roi, imagem.copy()
     
     # Extrair coordenadas dos pixels das linhas
@@ -106,7 +180,7 @@ def detetar_linhas_janela_deslizante(imagem):
     imagem_linhas = np.zeros_like(imagem)
     
     try:
-        if len(x_esquerda) > 0 and len(x_direita) > 0:
+        if len(x_esquerda) > 10 and len(x_direita) > 10:  # Mínimo de pontos para ajustar
             # Ajustar polinómios
             coefs_esquerda = np.polyfit(y_esquerda, x_esquerda, 2)
             coefs_direita = np.polyfit(y_direita, x_direita, 2)
@@ -151,10 +225,11 @@ def detetar_linhas_janela_deslizante(imagem):
     
     except Exception as e:
         print(f"Erro ao ajustar polinómios: {e}")
+        return imagem, img_debug, binario_roi, imagem.copy()
 
     resultado = cv2.addWeighted(imagem, 0.8, imagem_linhas, 1, 0)
     
-    return resultado, img_debug, binario_roi, imagem_linhas
+    return resultado, img_debug, binario_roi, imagem_linhas, esquerda_base, direita_base
 
 def detetar_linhas_estrada(imagem):
     # Converter para escala de cinzentos
@@ -220,7 +295,7 @@ def detetar_linhas_estrada(imagem):
     # Combinar as imagens
     resultado = cv2.addWeighted(imagem, 0.8, imagem_linhas, 1, 0)
     
-    cv2.imshow('RESULTADO', resultado)
+    cv2.imshow('CARLA', resultado)
  
 
 
@@ -330,8 +405,24 @@ def main():
         traffic_manager.global_percentage_speed_difference(10.0)
         
         #  janela única para mostrar tudo
-        cv2.namedWindow('CARLA', cv2.WINDOW_NORMAL)
-      
+        cv2.namedWindow('Controlos')
+        cv2.resizeWindow('Controlos', 600, 400)
+        
+        # Criar sliders para os parâmetros
+        cv2.createTrackbar('Threshold', 'Controlos', thresh_value, 255, nothing)
+        cv2.createTrackbar('Num Janelas', 'Controlos', n_janelas, 50, nothing)
+        cv2.createTrackbar('Margem', 'Controlos', margem, 200, nothing)
+        cv2.createTrackbar('Min Pixels', 'Controlos', min_pixels, 200, nothing)
+        
+        # Sliders para o ROI
+        cv2.createTrackbar('ROI Topo X', 'Controlos', LARGURA//4, LARGURA, nothing)
+        cv2.createTrackbar('ROI Topo Y', 'Controlos', ALTURA//2, ALTURA, nothing)
+        cv2.createTrackbar('ROI Larg', 'Controlos', LARGURA//2, LARGURA, nothing)
+        
+        # Criar janela para visualização
+        cv2.namedWindow('Debug', cv2.WINDOW_NORMAL)
+        cv2.resizeWindow('Debug', LARGURA*2, ALTURA*2)
+        
  
    
         
@@ -355,7 +446,8 @@ def main():
         # Ciclo principal
         a_correr = True
         print("Controlos: W/S - Acelerar/Travar | A/D - Virar | ESPAÇO - Travão de mão | ESC - Sair")
-        
+        left_base_prev = None
+        right_base_prev = None
         while a_correr:
             if modo_sincrono:
                 world.tick()
@@ -380,12 +472,60 @@ def main():
                 
                 
                
-                
+                detetar_linhas_estrada(img_original)
                 cv2.imshow('CARLA', img_original)
 
-                detetar_linhas_estrada(imagem_atual)
-         
+                #detetar_linhas_estrada(imagem_atual)
+                # imagem_bgr = cv2.cvtColor(imagem_atual, cv2.COLOR_RGB2BGR)
+    
+ 
+                imagem_bgr = cv2.cvtColor(imagem_atual, cv2.COLOR_RGB2BGR)
+                 # Ler valores dos sliders
+                thresh_val = cv2.getTrackbarPos('Threshold', 'Controlos')
+                n_windows = cv2.getTrackbarPos('Num Janelas', 'Controlos')
+                if n_windows < 1: n_windows = 1  # Evitar divisão por zero
+                margin = cv2.getTrackbarPos('Margem', 'Controlos')
+                minpix = cv2.getTrackbarPos('Min Pixels', 'Controlos')
                 
+                # Ler valores do ROI
+                roi_topo_x = cv2.getTrackbarPos('ROI Topo X', 'Controlos')
+                roi_topo_y = cv2.getTrackbarPos('ROI Topo Y', 'Controlos')
+                roi_largura = cv2.getTrackbarPos('ROI Larg', 'Controlos')
+                
+                # Calcular os pontos do ROI baseados nos sliders
+                roi_points = [
+                    [roi_topo_x, roi_topo_y],                      # Topo esquerdo
+                    [roi_topo_x + roi_largura, roi_topo_y],        # Topo direito
+                    [LARGURA, ALTURA],                             # Baixo direito
+                    [0, ALTURA]                                    # Baixo esquerdo
+                ]
+                
+                resultado, debug, binario, linhas, left_base, right_base = detetar_linhas_janela_deslizante(
+                    imagem_bgr, thresh_val, n_windows, margin, minpix, roi_points, left_base_prev, right_base_prev
+                )
+                
+       
+                left_base_prev = left_base
+                right_base_prev = right_base
+                    
+                    # Mostrar o resultado
+                topo = np.hstack((imagem_bgr, resultado))
+                baixo = np.hstack((debug, cv2.cvtColor(binario, cv2.COLOR_GRAY2BGR)))
+                
+                # Redimensionar se necessário para igualar dimensões
+                if baixo.shape[1] != topo.shape[1]:
+                    baixo = cv2.resize(baixo, (topo.shape[1], baixo.shape[0]))
+                
+                # Juntar visualizações
+                visualizacao = np.vstack((topo, baixo))
+                
+                # Adicionar informações
+                info_text = f"Thresh: {thresh_val} | Janelas: {n_windows} | Margem: {margin} | Min Pixels: {minpix}"
+                cv2.putText(visualizacao, info_text, (10, 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
+                # Mostrar a visualização
+                cv2.imshow('Debug', visualizacao)
         
                 key = cv2.waitKey(1) & 0xFF
                 

@@ -258,57 +258,6 @@ def fit_polynomial(binary_warped):
     return left_fitx, right_fitx, result_img, out_img, ploty
 
 
-def apply_thresholds_carla(img, vals):
-    """
-    Versão modificada do apply_thresholds para o CARLA usando valores dos sliders
-    """
-    # Descompactar valores dos sliders
-    thresh_min, thresh_max, sobel_min, sobel_max, canny_min, canny_max = vals
-    
-    # Converter para escala de cinza
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    # Aplicar blur para reduzir ruído
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    
-    # Aplicar limiar para destacar linhas brancas
-    _, thresh = cv2.threshold(blur, thresh_min, 255, cv2.THRESH_BINARY)
-    
-    # Aplicar Sobel para detetar bordas na direção x
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-    abs_sobelx = np.absolute(sobelx)
-    scaled_sobel = np.uint8(255*abs_sobelx/np.max(abs_sobelx))
-    
-    # Limiar para o gradiente Sobel
-    sobel_binary = np.zeros_like(scaled_sobel)
-    sobel_binary[(scaled_sobel >= sobel_min) & (scaled_sobel <= sobel_max)] = 1
-    
-    # Deteção de bordas Canny
-    edges = cv2.Canny(blur, canny_min, canny_max)
-    edges_binary = edges / 255  # Convertendo para binário (0 e 1)
-    
-    # Combinação dos métodos (OR lógico)
-    combined_binary = np.zeros_like(sobel_binary)
-    combined_binary[(thresh > 0) | (sobel_binary == 1) | (edges_binary == 1)] = 1
-    
-    # Aplicar região de interesse
-    mask = np.zeros_like(combined_binary)
-    height, width = combined_binary.shape
-    
-    # Região ajustada para estradas do CARLA
-    region = np.array([
-        [(width*0.2, height), 
-         (width*0.45, height*0.6),
-         (width*0.55, height*0.6), 
-         (width*0.8, height)]
-    ], dtype=np.int32)
-    
-    cv2.fillPoly(mask, region, 1)
-    masked_binary = cv2.bitwise_and(combined_binary, mask)
-    
-    return masked_binary
-
-
 def apply_thresholds(img):
     """
     Aplica diversos limiares para detectar bordas e faixas

@@ -287,7 +287,7 @@ def main():
                     save_frame_to_dataset(frame,steering_atual)
                 elif key == ord('t'):
                     toggle_dataset_collection()
-                elif key == ord('p'):  # Tecla 'p' para ativar/desativar piloto automático
+                elif key == ord('p'):  #   ativar/desativar piloto automático
                     # Alterna o estado do piloto automático
                     autopilot_enabled = not autopilot_enabled
                     controlo_atual.throttle = 0.25
