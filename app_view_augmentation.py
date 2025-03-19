@@ -13,10 +13,7 @@ from imgaug import augmenters as iaa
 DATASET_DIR = 'dataset'  
 NUM_SAMPLES = 8  # Número de amostras para visualizar
 
-# =========================================================================
-# Funções de carregamento de dados
-# =========================================================================
-
+ 
 def load_random_images(num_samples=8):
     """
     Carrega imagens aleatórias de todas as sessões disponíveis.

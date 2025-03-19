@@ -1,10 +1,4 @@
-"""
-Modelo de Direção Autônoma
---------------------------
-Este script implementa um modelo de direção autônoma baseado na arquitetura NVIDIA,
-utilizando imagens de câmera para predizer o ângulo de direção.
-Configurado para rodar apenas na CPU.
-"""
+ 
 
 import os
 import numpy as np

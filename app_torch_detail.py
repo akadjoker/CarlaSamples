@@ -1,12 +1,4 @@
-"""
-Avaliação do Modelo de Direção Autônoma (PyTorch)
--------------------------------------------------
-Este script carrega um modelo PyTorch treinado e realiza:
-1. Avaliação sobre um conjunto de validação
-2. Visualização de predições vs. valores reais
-3. Análise de estatísticas de desempenho
-4. Mapa de calor de atenção do modelo
-"""
+ 
 
 import os
 import numpy as np
