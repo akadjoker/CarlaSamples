@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from sklearn.utils import shuffle
 from imgaug import augmenters as iaa
  
-
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 def find_all_sessions(base_dir="dataset"):
     # Procuramos por pastas que começam com "session_" dentro da pasta dataset
     session_dirs = glob.glob(os.path.join(base_dir, "session_*"))
@@ -133,7 +133,7 @@ def data_generator(data, batch_size=32, target_size=(200, 66), augment=True):
             
             for _, row in batch_samples.iterrows():
                 # Carregar e pré-processar imagem
-                img = preprocess_image(row['full_image_path'], target_size)
+                img = preprocess_image(row['full_image_path'])
                 steering = row['steering']
                 
                 # Aumento de dados 
