@@ -200,7 +200,7 @@ def main():
        
                 process = preProcess(img_original)
                 image = np.array([process])
-                angulo = float(model.predict(image)[0]) + (0.080-0.015)
+                angulo = float(model.predict(image)[0]) #+ (0.080-0.015)
                 steering_wheel = rotate_steering_wheel(img_original, angulo)
 
                

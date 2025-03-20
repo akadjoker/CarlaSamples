@@ -313,6 +313,7 @@ def main():
                 elif key == ord('s'):
                     controlo_atual.throttle = 0.0
                     controlo_atual.brake = 0.7
+                    
                 elif key == ord('a'):
                     controlo_atual.steer = -0.5
                 elif key == ord('d'):
