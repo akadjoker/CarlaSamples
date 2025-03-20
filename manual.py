@@ -10,7 +10,7 @@ import math
 import argparse
 
  
-sys.path.append('/home/djoker/code/CARLA_0.9.15/PythonAPI/carla')
+
 
  
 collecting_dataset = False
@@ -75,6 +75,9 @@ def save_frame_to_dataset(frame, steering):
     
     return True
 
+
+
+
 def process_image(image):
     """Função de callback para processar imagens da câmera"""
     global current_image
@@ -100,11 +103,9 @@ def simple_navigate(world, vehicle,   speed_factor=0.5):
     print("A/D: Virar esquerda/direita | S: Travar | W: Acelerar | Espaço: Centralizar direção")
     
     while running :
-        # Atualiza o mundo no modo síncrono
         world.tick()
         
         if not paused:
-            # Aplica controle do veículo
             vehicle_control.throttle = speed_factor
             vehicle_control.steer = steering_angle
             vehicle_control.brake = 0.0
@@ -120,8 +121,8 @@ def simple_navigate(world, vehicle,   speed_factor=0.5):
             current_steering = vehicle_control.steer
             
             # Informações básicas
-            cv2.putText(img_display, f"Velocidade: {speed:.1f} km/h", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            cv2.putText(img_display, f"Direção: {current_steering:.2f}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(img_display, f"Speed: {speed:.1f} km/h", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(img_display, f"Direction: {current_steering:.2f}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
     
             
             # Informações do dataset
@@ -131,16 +132,10 @@ def simple_navigate(world, vehicle,   speed_factor=0.5):
                 if int(time.time() * 2) % 2 == 0:
                     cv2.circle(img_display, (25, 150), 10, (0, 0, 255), -1)
             
-            # Status da navegação
-            if paused:
-                cv2.putText(img_display, "NAVEGAÇÃO PAUSADA (pressione 'R' para continuar)", 
-                           (10, HEIGHT - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-            
-            # Fator de velocidade
-            cv2.putText(img_display, f"Fator de velocidade: {speed_factor:.2f}", 
+            cv2.putText(img_display, f"Fator: {speed_factor:.2f}", 
                        (WIDTH - 200, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
             
-            # Comandos
+            
             cv2.putText(img_display, "ENTER: Capturar | T: Nova sessão | A/D: Direção | ESC: Sair", 
                        (10, HEIGHT - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
@@ -154,7 +149,6 @@ def simple_navigate(world, vehicle,   speed_factor=0.5):
                 print("Navegação interrompida pelo usuário.")
                 return False
             elif key == 13:  # ENTER
-                # Captura frame para o dataset
                 if not collecting_dataset:
                     toggle_dataset_collection()
                 
@@ -213,8 +207,7 @@ def simple_navigate(world, vehicle,   speed_factor=0.5):
     return True  # Navegação completada normalmente
 
 def main():
-    parser = argparse.ArgumentParser(description='CARLA Navegação Simples e Coleta de Dados')
-    parser.add_argument('--map', type=str, default='Town04', help='Mapa a usar (Town04 recomendado)')
+    parser = argparse.ArgumentParser(description='CARLA')
     parser.add_argument('--speed', type=float, default=0.0, help='Fator de velocidade inicial (0.1-1.0)')
  
     args = parser.parse_args()
@@ -222,27 +215,10 @@ def main():
     client = carla.Client('localhost', 2000)
     client.set_timeout(10.0)
  
-    # try:
-    #     world = client.load_world(args.map)
-    #     print(f"Mapa carregado: {args.map}")
-    # except Exception as e:
-    #     print(f"Erro ao carregar mapa: {e}")
-    #     world = client.get_world()
-    #     print(f"Usando mapa atual: {world.get_map().name}")
+ 
     world = client.get_world()
     
-    # Reduz complexidade de renderização para melhorar desempenho
-    world.unload_map_layer(carla.MapLayer.All)
-    #world.load_map_layer(carla.MapLayer.Ground)
-    world.unload_map_layer(carla.MapLayer.Decals)
-    world.unload_map_layer(carla.MapLayer.Props)
-    world.unload_map_layer(carla.MapLayer.StreetLights)
-    world.unload_map_layer(carla.MapLayer.Foliage)
-    world.unload_map_layer(carla.MapLayer.ParkedVehicles)
-    world.unload_map_layer(carla.MapLayer.Particles)
-    world.unload_map_layer(carla.MapLayer.Walls)
-    world.unload_map_layer(carla.MapLayer.Buildings)
-
+ 
     
     # Ativa modo síncrono
     #settings = world.get_settings()
@@ -250,12 +226,12 @@ def main():
     #settings.synchronous_mode = True
     #settings.fixed_delta_seconds = 0.05
     #world.apply_settings(settings)
-    print("Modo síncrono ativado")
+    
     
     actors_list = []
     
     try:
-        # Seleciona blueprint para o veículo
+   
         blueprint_library = world.get_blueprint_library()
         vehicle_bp = blueprint_library.find('vehicle.tesla.model3')
         
@@ -290,7 +266,7 @@ def main():
         actors_list.append(camera)
         print("Câmera criada")
         
-        # Registra função de callback para a câmera
+ 
         camera.listen(process_image)
         
  
@@ -300,16 +276,11 @@ def main():
         simple_navigate(world, vehicle,   speed_factor=args.speed)
     
     finally:
-        # Restaura configurações originais do mundo
-        #world.apply_settings(original_settings)
-        
-        # Limpa atores
-
         for actor in actors_list:
             if actor is not None and actor.is_alive:
                 actor.destroy()
         
-        # Fecha arquivo do dataset se estiver aberto
+ 
         if 'dataset_file' in globals() and dataset_file:
             dataset_file.close()
             print(f"Dataset salvo com {frame_count} frames")
