@@ -1,10 +1,16 @@
 import cv2
 import torch
 import numpy as np
-from torchvision import transforms
 from model_light import LightSteeringNet
 from PIL import Image
 import math
+
+
+def transform(pil_img):
+    pil_img = pil_img.resize(IMG_SIZE)
+    img_array = np.array(pil_img).astype(np.float32) / 255.0  # Normaliza
+    img_array = np.transpose(img_array, (2, 0, 1))  # HWC → CHW
+    return torch.tensor(img_array, dtype=torch.float32)
 
 # ============================
 # Configurações
@@ -13,13 +19,6 @@ MODEL_PATH = 'model_light.pth'
 VIDEO_PATH = 'video_final.mp4'
 IMG_SIZE = (64, 64)
 
-# ============================
-# Transform
-# ============================
-transform = transforms.Compose([
-    transforms.Resize(IMG_SIZE),
-    transforms.ToTensor()
-])
 
 # ============================
 # Modelo
@@ -49,6 +48,7 @@ while True:
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     pil = Image.fromarray(rgb)
     tensor = transform(pil).unsqueeze(0).to(device)
+
 
     with torch.no_grad():
         steering = model(tensor).item()
