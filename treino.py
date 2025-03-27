@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, random_split
-import torchvision.transforms as transforms
+ 
 from model_light import LightSteeringNet
 
 # ============================
@@ -44,11 +44,10 @@ class SteeringDataset(Dataset):
     def __init__(self, image_paths, steering_angles):
         self.image_paths = image_paths
         self.steering_angles = steering_angles
-
-        self.transform = transforms.Compose([
-            transforms.Resize(IMG_SIZE),
-            transforms.ToTensor()
-        ])
+        self.transform = lambda img: torch.tensor(
+            np.array(img.resize(IMG_SIZE)).transpose((2, 0, 1)) / 255.0,
+            dtype=torch.float32
+        )
 
     def __len__(self):
         return len(self.image_paths)
@@ -58,6 +57,7 @@ class SteeringDataset(Dataset):
         image = self.transform(image)
         angle = self.steering_angles[idx]
         return image, torch.tensor(angle, dtype=torch.float32)
+
 
 # ============================
 # Carregar dados

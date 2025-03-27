@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, random_split
-import torchvision.transforms as transforms
+ 
 
 
 class LightSteeringNet(nn.Module):
