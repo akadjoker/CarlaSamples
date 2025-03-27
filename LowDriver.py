@@ -95,9 +95,11 @@ class Controller:
                     pil = Image.fromarray(rgb)
                     tensor = transform(pil).unsqueeze(0).to(self.device)
 
+                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    pil = Image.fromarray(rgb)
+                    tensor = transform(pil).unsqueeze(0).to(self.device)
                     with torch.no_grad():
-                        output = self.model(tensor)
-                        self.steering = float(output[0])
+                        self.steering = self.model(tensor).item()
 
                     self.steering = max(-1.0, min(1.0, self.steering))
                     self.car.set_steering(self.steering)
