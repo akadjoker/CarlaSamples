@@ -44,5 +44,6 @@ class LightSteeringNet(nn.Module):
 
     def forward(self, x):
         x = self.features(x)
-        return self.regressor(x).squeeze()
+        return self.regressor(x).squeeze(1)  # remove apenas o dim=1 (output = (batch,))
+
 
